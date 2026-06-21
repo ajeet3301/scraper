@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
+
+      - name: Type check
+        run: npx tsc --noEmit
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
+          NEXTAUTH_SECRET: "ci-test-secret"
+          NEXTAUTH_URL: "http://localhost:3000"
+
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test"
+          NEXTAUTH_SECRET: "ci-test-secret"
+          NEXTAUTH_URL: "http://localhost:3000"
+
+  # Vercel auto-deploys on push to main automatically once connected —
+  # no extra deploy step needed here. This workflow just verifies the
+  # build succeeds before Vercel's own deployment runs.

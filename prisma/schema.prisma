@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// NOTE: directUrl is used for migrations (bypasses connection pooling).
+// If you only have one connection string (no pgbouncer pooler), set
+// DIRECT_URL to the same value as DATABASE_URL in your environment variables.
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("USER")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  projects Project[]
+  apiKeys  APIKey[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  websiteUrl  String
+  description String?
+  status      String   @default("PENDING")
+  engine      String   @default("AUTO")
+  schedule    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scrapeJobs   ScrapeJob[]
+  datasets     Dataset[]
+  generatedApis GeneratedAPI[]
+
+  @@map("projects")
+}
+
+model ScrapeJob {
+  id           String    @id @default(cuid())
+  projectId    String
+  engine       String    @default("AUTO")
+  pagesScraped Int       @default(0)
+  status       String    @default("QUEUED")
+  errorMessage String?   @db.Text
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("scrape_jobs")
+}
+
+model Dataset {
+  id           String   @id @default(cuid())
+  projectId    String   @unique
+  jsonData     Json?
+  markdownData String?  @db.Text
+  schemaData   Json?
+  pageCount    Int      @default(1)
+  sizeBytes    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("datasets")
+}
+
+model GeneratedAPI {
+  id          String   @id @default(cuid())
+  projectId   String
+  endpoint    String
+  method      String   @default("GET")
+  description String?
+  hitCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("generated_apis")
+}
+
+model APIKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String    @default("Default Key")
+  key        String    @unique
+  usageCount Int       @default(0)
+  usageLimit Int       @default(10000)
+  lastUsedAt DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
