@@ -5,6 +5,7 @@ import { timeAgo } from "@/lib/utils";
 import Link from "next/link";
 import { Card, Badge } from "@/components/ui/index";
 import { NewProjectDialog } from "@/components/dashboard/NewProjectDialog";
+import { DeleteProjectButton } from "@/components/dashboard/DeleteProjectButton";
 import { Globe, Cpu, Code2, FolderOpen, ArrowRight } from "lucide-react";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -52,7 +53,10 @@ export default async function ProjectsPage() {
                   <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
                     <Globe className="h-5 w-5 text-indigo-500" />
                   </div>
-                  <Badge variant="outline" className={`text-xs ${STATUS_STYLE[p.status] ?? ""}`}>{p.status}</Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className={`text-xs ${STATUS_STYLE[p.status] ?? ""}`}>{p.status}</Badge>
+                    <DeleteProjectButton projectId={p.id} projectName={p.name} />
+                  </div>
                 </div>
                 <h3 className="font-semibold mb-1 group-hover:text-indigo-400 transition-colors truncate">{p.name}</h3>
                 <p className="text-xs text-muted-foreground mb-4 truncate">{p.websiteUrl}</p>
