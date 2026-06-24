@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { runScrapeJob } from "@/lib/scrapeJob";
 import { z } from "zod";
+
+// Allow this function (and the waitUntil-tracked background scrape) up to 60s.
+// Hobby plan caps at 60s; Pro/Enterprise can go higher if you raise this.
+export const maxDuration = 60;
 
 const createSchema = z.object({
   name: z.string().min(2).max(100),
@@ -47,10 +52,24 @@ export async function POST(req: NextRequest) {
       data: { projectId: project.id, engine: data.engine, status: "RUNNING", startedAt: new Date() },
     });
 
-    // Run scrape inline — Vercel functions support up to 60s (Pro) / 10s (Hobby may need streaming)
-    // We run it synchronously here so the user sees a result fast; for larger sites this
-    // can be moved to a queue, but for the free-tier use case this works great.
-    runScrapeJob(project.id, job.id, data.websiteUrl, data.engine).catch(console.error);
+    // IMPORTANT: On Vercel, once this function returns its response, the serverless
+    // instance is frozen/killed — any un-awaited background promise gets cut off
+    // mid-flight. waitUntil() tells Vercel to keep the function alive until this
+    // promise settles, even though we've already sent the response to the client.
+    waitUntil(
+      runScrapeJob(project.id, job.id, data.websiteUrl, data.engine).catch(async (err) => {
+        console.error("Scrape job failed:", err);
+        // Make sure a crashed job doesn't stay stuck in RUNNING forever
+        await prisma.scrapeJob.update({
+          where: { id: job.id },
+          data: { status: "FAILED", errorMessage: String(err?.message ?? err), finishedAt: new Date() },
+        }).catch(() => {});
+        await prisma.project.update({
+          where: { id: project.id },
+          data: { status: "FAILED" },
+        }).catch(() => {});
+      })
+    );
 
     return NextResponse.json(project, { status: 201 });
   } catch (err) {
